@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { UploadCloud, FileSpreadsheet, AlertCircle, Loader2, PhoneCall, CheckCircle2, XCircle } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, AlertCircle, Loader2, PhoneCall, CheckCircle2, XCircle, Mail } from 'lucide-react';
 
 interface ExtractedData {
   name: string;
@@ -16,6 +16,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isCalling, setIsCalling] = useState(false);
   const [callResults, setCallResults] = useState<any[] | null>(null);
+  const [isEmailing, setIsEmailing] = useState(false);
+  const [emailResults, setEmailResults] = useState<any[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -48,6 +50,7 @@ export default function Home() {
     setError(null);
     setData([]);
     setCallResults(null);
+    setEmailResults(null);
 
     // Check if it's an excel file (basic check)
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.type.includes('spreadsheet');
@@ -114,6 +117,34 @@ export default function Home() {
       setError(err.message || 'An unexpected error occurred while calling.');
     } finally {
       setIsCalling(false);
+    }
+  };
+
+  const handleSendEmails = async () => {
+    if (data.length === 0) return;
+    
+    setIsEmailing(true);
+    setError(null);
+    setEmailResults(null);
+
+    try {
+      const response = await fetch('/api/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contacts: data }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send emails');
+      }
+
+      setEmailResults(result.results);
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred while sending emails.');
+    } finally {
+      setIsEmailing(false);
     }
   };
 
@@ -193,7 +224,29 @@ export default function Home() {
               </span>
             </div>
 
-            <div className="flex justify-end mb-2">
+            <div className="flex justify-end gap-3 mb-2">
+              <button
+                onClick={handleSendEmails}
+                disabled={isEmailing}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg
+                  ${isEmailing 
+                    ? 'bg-neutral-800 text-neutral-400 cursor-not-allowed'
+                    : 'bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 hover:border-indigo-500/50'}
+                `}
+              >
+                {isEmailing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Sending Emails...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-5 h-5" />
+                    Send Emails
+                  </>
+                )}
+              </button>
+
               <button
                 onClick={handleMakeCalls}
                 disabled={isCalling}
@@ -232,6 +285,39 @@ export default function Home() {
                           <span className="flex items-center gap-1.5 text-emerald-400 text-sm font-medium bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
                             <CheckCircle2 className="w-4 h-4" />
                             Initiated
+                          </span>
+                        ) : res.status === 'skipped' ? (
+                          <span className="flex items-center gap-1.5 text-amber-400 text-sm font-medium bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+                            Skipped
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-red-400 text-sm font-medium bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20" title={res.reason}>
+                            <XCircle className="w-4 h-4" />
+                            Failed
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {emailResults && (
+              <div className="p-6 rounded-2xl border border-neutral-800 bg-neutral-900/50 mb-4">
+                <h3 className="text-xl font-semibold mb-4 text-white">Email Results</h3>
+                <ul className="space-y-3">
+                  {emailResults.map((res, idx) => (
+                    <li key={idx} className="flex items-center justify-between p-3 rounded-lg bg-neutral-800/50">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-neutral-200">{res.name || 'Unknown'}</span>
+                        <span className="text-sm text-neutral-400">{res.email}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {res.status === 'success' ? (
+                          <span className="flex items-center gap-1.5 text-emerald-400 text-sm font-medium bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Sent
                           </span>
                         ) : res.status === 'skipped' ? (
                           <span className="flex items-center gap-1.5 text-amber-400 text-sm font-medium bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
